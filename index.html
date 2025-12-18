@@ -120,6 +120,15 @@
             width: auto;
         }
 
+        .btn-secondary {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #2980b9;
+        }
+
         .btn-danger {
             background: #ff4757;
             color: white;
@@ -179,7 +188,7 @@
             display: grid;
             grid-template-columns: 1fr 1fr auto;
             gap: 15px;
-            margin-bottom: 12px;
+            margin-bottom: 15px;
             align-items: center;
         }
 
@@ -198,28 +207,42 @@
             color: #333;
         }
 
-        .teacher-card-subjects {
+        .grade-assignment {
+            background: #f0f4ff;
+            border: 1px solid #667eea;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+
+        .grade-assignment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .grade-badge {
+            background: #3498db;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+
+        .subject-badges {
             display: flex;
             flex-wrap: wrap;
             gap: 6px;
-            margin-top: 10px;
         }
 
         .badge {
-            background: #764ba2;
+            background: #2ecc71;
             color: white;
             padding: 6px 12px;
             border-radius: 12px;
             font-size: 0.9em;
             display: inline-block;
-        }
-
-        .badge.subject {
-            background: #2ecc71;
-        }
-
-        .badge.grade {
-            background: #3498db;
         }
 
         .list-container {
@@ -375,7 +398,7 @@
     <div class="container">
         <div class="header">
             <h1>📚 School Timetable Generator</h1>
-            <p>Configure teachers with subjects, then generate your timetable automatically</p>
+            <p>Configure teachers with subjects per grade, then generate conflict-free timetable</p>
         </div>
 
         <div class="content">
@@ -402,16 +425,16 @@
                 </div>
             </div>
 
-            <!-- STEP 2: ADD TEACHERS WITH SUBJECTS -->
+            <!-- STEP 2: ADD TEACHERS WITH SUBJECTS PER GRADE -->
             <div class="section">
-                <h2>Step 2: Add Teachers & Assign Subjects</h2>
+                <h2>Step 2: Add Teachers & Assign Subjects Per Grade</h2>
 
                 <div class="highlight-box">
-                    <strong>📌 Instructions:</strong> Add each teacher with their name, code, subjects they teach, and grades they teach to. One teacher can teach multiple subjects and multiple grades.
+                    <strong>📌 Instructions:</strong> Add each teacher with their code and name. Then assign subjects for each grade separately. For example: Teacher 01 teaches Math & English in Grade 9, Science in Grade 8, etc.
                 </div>
 
                 <div class="grid-2">
-                    <!-- Left: Teacher Form -->
+                    <!-- Left: Teacher Basic Info -->
                     <div>
                         <div class="form-group">
                             <label>👨‍🏫 Teacher Code *</label>
@@ -423,26 +446,34 @@
                             <input type="text" id="teacherName" placeholder="e.g., John Doe">
                         </div>
 
-                        <div class="form-group">
-                            <label>📚 Which Grades Does This Teacher Teach? *</label>
-                            <div class="chip-grid" id="teacherGrades"></div>
-                        </div>
+                        <button class="btn-secondary" onclick="createNewTeacher()" style="width: 100%;">
+                            ✓ Create Teacher
+                        </button>
                     </div>
 
-                    <!-- Right: Subject Selection -->
+                    <!-- Right: Grade-Subject Assignment -->
                     <div>
                         <div class="form-group">
-                            <label>🎓 Select All Subjects This Teacher Teaches *</label>
+                            <label id="gradeSelectLabel" style="display: none;">🎓 Select Grade to Add Subjects *</label>
+                            <div class="chip-grid" id="gradeForSubjects"></div>
+                        </div>
+
+                        <div class="form-group" id="subjectSelectGroup" style="display: none;">
+                            <label>📚 Select Subjects for This Grade *</label>
                             <p style="font-size: 0.9em; color: #666; margin-bottom: 10px;">Click each subject to select/deselect</p>
-                            <div class="chip-grid" id="teacherSubjects"></div>
+                            <div class="chip-grid" id="subjectsForGrade"></div>
+                        </div>
+
+                        <div id="assignmentButtonsContainer" style="display: none;">
+                            <button class="btn-secondary" onclick="addGradeSubjectAssignment()" style="width: 100%; margin-bottom: 10px;">
+                                ➕ Add Subjects for This Grade
+                            </button>
+                            <button class="btn-danger btn-small" onclick="cancelTeacherForm()" style="width: 100%;">
+                                Cancel
+                            </button>
                         </div>
                     </div>
                 </div>
-
-                <!-- Big ADD TEACHER Button -->
-                <button class="btn-primary" onclick="addTeacher()" style="margin-top: 20px; padding: 18px; font-size: 1.3em;">
-                    ➕ ADD TEACHER WITH SELECTED SUBJECTS
-                </button>
 
                 <!-- Teachers List -->
                 <div style="margin-top: 30px;">
@@ -454,7 +485,7 @@
             <!-- STEP 3: GENERATE TIMETABLE -->
             <div class="section">
                 <h2>Step 3: Generate Your Timetable</h2>
-                <p style="margin-bottom: 15px; color: #666; font-size: 1.05em;">Once you've added all teachers and their subjects, click below to generate the timetable.</p>
+                <p style="margin-bottom: 15px; color: #666; font-size: 1.05em;">Once you've added all teachers and their subjects per grade, click below to generate the timetable. No teacher will be scheduled in multiple grades simultaneously.</p>
                 <button class="btn-primary" onclick="generateTimetable()" style="padding: 18px; font-size: 1.3em;">
                     🚀 GENERATE TIMETABLE
                 </button>
@@ -494,7 +525,6 @@
     </div>
 
     <script>
-        // Global State
         const state = {
             grades: ['Grade 7', 'Grade 8', 'Grade 9'],
             subjects: [
@@ -509,8 +539,9 @@
                 { name: 'Agric', sessions: 4 }
             ],
             teachers: [],
-            selectedSubjectsForNewTeacher: [],
-            selectedGradesForNewTeacher: [],
+            currentTeacher: null,
+            selectedGradeForSubjects: null,
+            selectedSubjectsForGrade: [],
             timetable: null,
             days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
             slots: [
@@ -535,8 +566,6 @@
             renderGrades();
             renderSubjects();
             renderTeachers();
-            updateTeacherGrades();
-            updateTeacherSubjects();
         }
 
         function showMessage(text, type) {
@@ -560,14 +589,14 @@
             state.grades.push(grade);
             input.value = '';
             renderGrades();
-            updateTeacherGrades();
+            updateGradeSelection();
             showMessage(`${grade} added successfully`, 'success');
         }
 
         function removeGrade(grade) {
             state.grades = state.grades.filter(g => g !== grade);
             renderGrades();
-            updateTeacherGrades();
+            updateGradeSelection();
             showMessage(`${grade} removed`, 'success');
         }
 
@@ -575,6 +604,15 @@
             document.getElementById('gradesChips').innerHTML = state.grades.map(grade => `
                 <div class="chip" onclick="removeGrade('${grade}')">
                     ${grade} ✕
+                </div>
+            `).join('');
+        }
+
+        function updateGradeSelection() {
+            document.getElementById('gradeForSubjects').innerHTML = state.grades.map(grade => `
+                <div class="chip ${state.selectedGradeForSubjects === grade ? 'selected' : ''}"
+                    onclick="selectGradeForSubjects('${grade}')">
+                    ${grade}
                 </div>
             `).join('');
         }
@@ -594,43 +632,7 @@
             `).join('');
         }
 
-        function updateTeacherGrades() {
-            document.getElementById('teacherGrades').innerHTML = state.grades.map(grade => `
-                <div class="chip ${state.selectedGradesForNewTeacher.includes(grade) ? 'selected' : ''}"
-                    onclick="toggleGradeSelection('${grade}')">
-                    ${grade}
-                </div>
-            `).join('');
-        }
-
-        function updateTeacherSubjects() {
-            document.getElementById('teacherSubjects').innerHTML = state.subjects.map(sub => `
-                <div class="chip ${state.selectedSubjectsForNewTeacher.includes(sub.name) ? 'selected' : ''}"
-                    onclick="toggleSubjectSelection('${sub.name}')">
-                    ${sub.name}
-                </div>
-            `).join('');
-        }
-
-        function toggleGradeSelection(grade) {
-            if (state.selectedGradesForNewTeacher.includes(grade)) {
-                state.selectedGradesForNewTeacher = state.selectedGradesForNewTeacher.filter(g => g !== grade);
-            } else {
-                state.selectedGradesForNewTeacher.push(grade);
-            }
-            updateTeacherGrades();
-        }
-
-        function toggleSubjectSelection(subject) {
-            if (state.selectedSubjectsForNewTeacher.includes(subject)) {
-                state.selectedSubjectsForNewTeacher = state.selectedSubjectsForNewTeacher.filter(s => s !== subject);
-            } else {
-                state.selectedSubjectsForNewTeacher.push(subject);
-            }
-            updateTeacherSubjects();
-        }
-
-        function addTeacher() {
+        function createNewTeacher() {
             const code = document.getElementById('teacherCode').value.trim();
             const name = document.getElementById('teacherName').value.trim();
 
@@ -639,63 +641,138 @@
                 return;
             }
 
-            if (state.selectedSubjectsForNewTeacher.length === 0) {
-                showMessage('Please select at least one subject', 'error');
-                return;
-            }
-
-            if (state.selectedGradesForNewTeacher.length === 0) {
-                showMessage('Please select at least one grade', 'error');
-                return;
-            }
-
             if (state.teachers.some(t => t.code === code)) {
                 showMessage('Teacher code already exists', 'error');
                 return;
             }
 
-            state.teachers.push({
-                code,
-                name,
-                subjects: [...state.selectedSubjectsForNewTeacher],
-                grades: [...state.selectedGradesForNewTeacher]
-            });
+            state.currentTeacher = { code, name, assignments: [] };
+            state.selectedGradeForSubjects = null;
+            state.selectedSubjectsForGrade = [];
 
-            document.getElementById('teacherCode').value = '';
-            document.getElementById('teacherName').value = '';
-            state.selectedSubjectsForNewTeacher = [];
-            state.selectedGradesForNewTeacher = [];
-            updateTeacherGrades();
-            updateTeacherSubjects();
+            document.getElementById('gradeSelectLabel').style.display = 'block';
+            document.getElementById('subjectSelectGroup').style.display = 'none';
+            document.getElementById('assignmentButtonsContainer').style.display = 'none';
+
+            updateGradeSelection();
+            updateSubjectsForGrade();
+            showMessage(`Now assign subjects for ${name} (${code})`, 'info');
+        }
+
+        function selectGradeForSubjects(grade) {
+            state.selectedGradeForSubjects = grade;
+            state.selectedSubjectsForGrade = [];
+            updateGradeSelection();
+            updateSubjectsForGrade();
+            document.getElementById('subjectSelectGroup').style.display = 'block';
+            document.getElementById('assignmentButtonsContainer').style.display = 'block';
+        }
+
+        function updateSubjectsForGrade() {
+            document.getElementById('subjectsForGrade').innerHTML = state.subjects.map(sub => `
+                <div class="chip ${state.selectedSubjectsForGrade.includes(sub.name) ? 'selected' : ''}"
+                    onclick="toggleSubjectForGrade('${sub.name}')">
+                    ${sub.name}
+                </div>
+            `).join('');
+        }
+
+        function toggleSubjectForGrade(subject) {
+            if (state.selectedSubjectsForGrade.includes(subject)) {
+                state.selectedSubjectsForGrade = state.selectedSubjectsForGrade.filter(s => s !== subject);
+            } else {
+                state.selectedSubjectsForGrade.push(subject);
+            }
+            updateSubjectsForGrade();
+        }
+
+        function addGradeSubjectAssignment() {
+            if (!state.currentTeacher) {
+                showMessage('Please create a teacher first', 'error');
+                return;
+            }
+
+            if (!state.selectedGradeForSubjects) {
+                showMessage('Please select a grade', 'error');
+                return;
+            }
+
+            if (state.selectedSubjectsForGrade.length === 0) {
+                showMessage('Please select at least one subject', 'error');
+                return;
+            }
+
+            const existingAssignment = state.currentTeacher.assignments.find(a => a.grade === state.selectedGradeForSubjects);
+            if (existingAssignment) {
+                existingAssignment.subjects = [...state.selectedSubjectsForGrade];
+            } else {
+                state.currentTeacher.assignments.push({
+                    grade: state.selectedGradeForSubjects,
+                    subjects: [...state.selectedSubjectsForGrade]
+                });
+            }
+
+            state.selectedGradeForSubjects = null;
+            state.selectedSubjectsForGrade = [];
+            updateGradeSelection();
+            updateSubjectsForGrade();
+            document.getElementById('subjectSelectGroup').style.display = 'none';
+            document.getElementById('assignmentButtonsContainer').style.display = 'none';
+
+            showMessage(`Subjects added successfully for selected grade`, 'success');
             renderTeachers();
-            showMessage(`Teacher ${name} (${code}) added successfully!`, 'success');
+        }
+
+        function cancelTeacherForm() {
+            if (state.currentTeacher && state.currentTeacher.assignments.length > 0) {
+                state.teachers.push(state.currentTeacher);
+                document.getElementById('teacherCode').value = '';
+                document.getElementById('teacherName').value = '';
+            }
+
+            state.currentTeacher = null;
+            state.selectedGradeForSubjects = null;
+            state.selectedSubjectsForGrade = [];
+
+            document.getElementById('gradeSelectLabel').style.display = 'none';
+            document.getElementById('subjectSelectGroup').style.display = 'none';
+            document.getElementById('assignmentButtonsContainer').style.display = 'none';
+
+            renderTeachers();
+            showMessage('Teacher saved successfully', 'success');
         }
 
         function renderTeachers() {
             const list = document.getElementById('teachersList');
-            if (state.teachers.length === 0) {
-                list.innerHTML = '<div class="empty-state">No teachers added yet. Add teachers above!</div>';
+            const allTeachers = [...state.teachers];
+            if (state.currentTeacher && state.currentTeacher.assignments.length > 0) {
+                allTeachers.push(state.currentTeacher);
+            }
+
+            if (allTeachers.length === 0) {
+                list.innerHTML = '<div class="empty-state">No teachers added yet. Create teachers above!</div>';
                 return;
             }
 
-            list.innerHTML = state.teachers.map((teacher, idx) => `
+            list.innerHTML = allTeachers.map((teacher, idx) => `
                 <div class="teacher-card">
                     <div class="teacher-card-header">
                         <div class="teacher-card-code">${teacher.code}</div>
                         <div class="teacher-card-name">${teacher.name}</div>
-                        <button class="btn-danger btn-small" onclick="deleteTeacher(${idx})">Delete</button>
+                        ${state.teachers.includes(teacher) ? `<button class="btn-danger btn-small" onclick="deleteTeacher(${state.teachers.indexOf(teacher)})">Delete</button>` : ''}
                     </div>
-                    <div style="margin-top: 10px;">
-                        <strong style="color: #667eea;">Subjects:</strong>
-                        <div class="teacher-card-subjects">
-                            ${teacher.subjects.map(s => `<span class="badge subject">${s}</span>`).join('')}
-                        </div>
-                    </div>
-                    <div style="margin-top: 10px;">
-                        <strong style="color: #667eea;">Grades:</strong>
-                        <div class="teacher-card-subjects">
-                            ${teacher.grades.map(g => `<span class="badge grade">${g}</span>`).join('')}
-                        </div>
+                    <div>
+                        ${teacher.assignments.map(assign => `
+                            <div class="grade-assignment">
+                                <div class="grade-assignment-header">
+                                    <span class="grade-badge">${assign.grade}</span>
+                                    ${state.teachers.includes(teacher) ? `<button class="btn-danger btn-small" onclick="removeGradeAssignment(${state.teachers.indexOf(teacher)}, '${assign.grade}')">Remove</button>` : ''}
+                                </div>
+                                <div class="subject-badges">
+                                    ${assign.subjects.map(s => `<span class="badge">${s}</span>`).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
                     </div>
                 </div>
             `).join('');
@@ -708,9 +785,20 @@
             showMessage(`Teacher ${teacher.name} deleted`, 'success');
         }
 
+        function removeGradeAssignment(teacherIdx, grade) {
+            const teacher = state.teachers[teacherIdx];
+            teacher.assignments = teacher.assignments.filter(a => a.grade !== grade);
+            if (teacher.assignments.length === 0) {
+                deleteTeacher(teacherIdx);
+            } else {
+                renderTeachers();
+                showMessage(`Assignment removed for ${teacher.name}`, 'success');
+            }
+        }
+
         function generateTimetable() {
             if (state.teachers.length === 0) {
-                showMessage('Please add at least one teacher first', 'error');
+                showMessage('Please add at least one teacher with assignments', 'error');
                 return;
             }
 
@@ -738,11 +826,11 @@
                     for (const grade of gradeOrder) {
                         const available = state.subjects.filter(sub => {
                             if (remaining[grade][sub.name] <= 0) return false;
-                            const teacher = state.teachers.find(t => 
-                                t.subjects.includes(sub.name) && t.grades.includes(grade)
-                            );
-                            if (!teacher || busyTeachers.has(teacher.code)) return false;
-                            return true;
+                            const teacher = state.teachers.find(t => {
+                                const assignment = t.assignments.find(a => a.grade === grade);
+                                return assignment && assignment.subjects.includes(sub.name) && !busyTeachers.has(t.code);
+                            });
+                            return !!teacher;
                         });
 
                         if (available.length === 0) continue;
@@ -753,10 +841,11 @@
                             if (cas) selected = cas;
                         }
 
-                        const teacher = state.teachers.find(t => 
-                            t.subjects.includes(selected.name) && t.grades.includes(grade)
-                        );
-                        
+                        const teacher = state.teachers.find(t => {
+                            const assignment = t.assignments.find(a => a.grade === grade);
+                            return assignment && assignment.subjects.includes(selected.name) && !busyTeachers.has(t.code);
+                        });
+
                         if (teacher) {
                             timetable[day][grade][slotIdx] = {
                                 subject: selected.name,
@@ -773,7 +862,7 @@
             displayTimetable();
             document.getElementById('timetableSection').style.display = 'block';
             window.scrollTo(0, document.getElementById('timetableSection').offsetTop - 100);
-            showMessage('✅ Timetable generated successfully!', 'success');
+            showMessage('✅ Timetable generated successfully! No teacher conflicts detected.', 'success');
         }
 
         function displayTimetable() {
@@ -796,11 +885,11 @@
             state.days.forEach(day => {
                 state.slots.forEach((slot, idx) => {
                     html += '<tr>';
-                    
+
                     if (slot.type === 'session') {
                         html += `<td style="font-weight: bold; background: #e8f1ff;">${day}</td>`;
                         html += `<td style="font-weight: bold; background: #e8f1ff;">${slot.time}</td>`;
-                        
+
                         gradesToShow.forEach(grade => {
                             const cell = state.timetable[day][grade][slot.id];
                             if (cell) {
@@ -866,4 +955,4 @@
         init();
     </script>
 </body>
-</html>
+                    </html>
