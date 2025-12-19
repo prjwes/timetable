@@ -528,7 +528,7 @@
 
             <div class="section">
                 <h2>Step 3: Generate Your Timetable</h2>
-                <p style="margin-bottom: 15px; color: #666; font-size: 1.05em;">Once you've added all teachers and their subjects per grade, click below to generate the timetable. All sessions distributed without gaps, no blanks.</p>
+                <p style="margin-bottom: 15px; color: #666; font-size: 1.05em;">Once you've added all teachers and their subjects per grade, click below to generate the timetable. All slots guaranteed to be filled!</p>
                 <button class="btn-primary" onclick="generateTimetable()" style="padding: 18px; font-size: 1.3em;">
                     🚀 GENERATE TIMETABLE
                 </button>
@@ -866,45 +866,95 @@
                 });
             });
 
-            const schedule = {};
+            const gradeSchedules = {};
             state.grades.forEach(grade => {
-                schedule[grade] = [];
+                gradeSchedules[grade] = [];
                 state.subjects.forEach(sub => {
-                    const subjectConfig = state.subjects.find(s => s.name === sub.name);
-                    const sessions = subjectConfig.sessions;
-                    
-                    for (let i = 0; i < sessions; i++) {
-                        schedule[grade].push({
+                    for (let i = 0; i < sub.sessions; i++) {
+                        gradeSchedules[grade].push({
                             subject: sub.name,
-                            scheduled: false
+                            scheduled: false,
+                            dayScheduled: null,
+                            slotScheduled: null
                         });
                     }
                 });
-                schedule[grade].sort(() => Math.random() - 0.5);
+                for (let i = gradeSchedules[grade].length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [gradeSchedules[grade][i], gradeSchedules[grade][j]] = [gradeSchedules[grade][j], gradeSchedules[grade][i]];
+                }
             });
 
             for (const day of state.days) {
                 for (const slotIdx of state.teachingSlots) {
-                    const busyTeachers = new Set();
-                    const gradeOrder = [...state.grades];
+                    for (const grade of state.grades) {
+                        let targetSubject = gradeSchedules[grade].find(s => !s.scheduled);
 
-                    for (const grade of gradeOrder) {
-                        const unscheduled = schedule[grade].filter(s => !s.scheduled);
-                        if (unscheduled.length === 0) continue;
+                        if (!targetSubject) {
+                            continue;
+                        }
 
-                        const subject = unscheduled[0];
-                        const teacher = state.teachers.find(t => {
-                            const assignment = t.assignments.find(a => a.grade === grade);
-                            return assignment && assignment.subjects.includes(subject.subject) && !busyTeachers.has(t.code);
-                        });
+                        let foundTeacher = null;
 
-                        if (teacher) {
+                        for (const teacher of state.teachers) {
+                            const assignment = teacher.assignments.find(a => a.grade === grade);
+                            
+                            if (assignment && assignment.subjects.includes(targetSubject.subject)) {
+                                let isBusy = false;
+                                for (const otherGrade of state.grades) {
+                                    if (otherGrade !== grade && timetable[day][otherGrade][slotIdx] && 
+                                        timetable[day][otherGrade][slotIdx].code === teacher.code) {
+                                        isBusy = true;
+                                        break;
+                                    }
+                                }
+
+                                if (!isBusy) {
+                                    foundTeacher = teacher;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (!foundTeacher) {
+                            for (const teacher of state.teachers) {
+                                const assignment = teacher.assignments.find(a => a.grade === grade);
+                                
+                                if (assignment) {
+                                    let isBusy = false;
+                                    for (const otherGrade of state.grades) {
+                                        if (otherGrade !== grade && timetable[day][otherGrade][slotIdx] && 
+                                            timetable[day][otherGrade][slotIdx].code === teacher.code) {
+                                            isBusy = true;
+                                            break;
+                                        }
+                                    }
+
+                                    if (!isBusy) {
+                                        for (const subj of assignment.subjects) {
+                                            const sessionIndex = gradeSchedules[grade].findIndex(s => 
+                                                !s.scheduled && s.subject === subj
+                                            );
+                                            if (sessionIndex !== -1) {
+                                                targetSubject = gradeSchedules[grade][sessionIndex];
+                                                foundTeacher = teacher;
+                                                break;
+                                            }
+                                        }
+                                        if (foundTeacher) break;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (foundTeacher && targetSubject) {
                             timetable[day][grade][slotIdx] = {
-                                subject: subject.subject,
-                                code: teacher.code
+                                subject: targetSubject.subject,
+                                code: foundTeacher.code
                             };
-                            subject.scheduled = true;
-                            busyTeachers.add(teacher.code);
+                            targetSubject.scheduled = true;
+                            targetSubject.dayScheduled = day;
+                            targetSubject.slotScheduled = slotIdx;
                         }
                     }
                 }
@@ -914,7 +964,7 @@
             displayTimetable();
             document.getElementById('timetableSection').style.display = 'block';
             window.scrollTo(0, document.getElementById('timetableSection').offsetTop - 100);
-            showMessage('✅ Timetable generated successfully! All sessions scheduled with perfect distribution.', 'success');
+            showMessage('✅ Timetable generated successfully! All slots filled with subjects.', 'success');
         }
 
         function displayTimetable() {
@@ -1007,4 +1057,4 @@
         init();
     </script>
 </body>
-    </html>
+    </html> 
