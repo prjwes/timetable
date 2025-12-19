@@ -354,13 +354,6 @@
             color: #667eea;
         }
 
-        .double-session-cell {
-            background: #d4e9ff;
-            font-weight: 700;
-            color: #4a5fc1;
-            border-bottom: 3px double #667eea;
-        }
-
         .break-cell {
             background: #fff3cd;
             color: #856404;
@@ -535,7 +528,7 @@
 
             <div class="section">
                 <h2>Step 3: Generate Your Timetable</h2>
-                <p style="margin-bottom: 15px; color: #666; font-size: 1.05em;">Once you've added all teachers and their subjects per grade, click below to generate the timetable. Sessions are distributed across the week with preference for one per day, double-sessioning when needed, and no teacher conflicts.</p>
+                <p style="margin-bottom: 15px; color: #666; font-size: 1.05em;">Once you've added all teachers and their subjects per grade, click below to generate the timetable. All sessions distributed without gaps, no blanks.</p>
                 <button class="btn-primary" onclick="generateTimetable()" style="padding: 18px; font-size: 1.3em;">
                     🚀 GENERATE TIMETABLE
                 </button>
@@ -607,8 +600,7 @@
                 { id: 10, time: '14:40-15:20', type: 'session' },
                 { id: 11, time: '15:20-16:00', type: 'games', label: 'Games' }
             ],
-            teachingSlots: [0, 1, 3, 4, 6, 7, 9, 10],
-            prioritySlots: [1, 4, 7, 10]
+            teachingSlots: [0, 1, 3, 4, 6, 7, 9, 10]
         };
 
         function init() {
@@ -702,7 +694,7 @@
             document.getElementById('gradeChips').innerHTML = state.grades.map(grade => {
                 const isAdded = state.currentTeacher && state.currentTeacher.assignments.some(a => a.grade === grade);
                 return `
-                    <div class="chip ${state.selectedGrade === grade ? 'selected' : ''} ${isAdded ? '' : ''}"
+                    <div class="chip ${state.selectedGrade === grade ? 'selected' : ''}"
                         onclick="selectGrade('${grade}')" style="${isAdded ? 'opacity: 0.6;' : ''}">
                         ${grade} ${isAdded ? '✓' : ''}
                     </div>
@@ -874,94 +866,47 @@
                 });
             });
 
-            const remaining = {};
+            const schedule = {};
             state.grades.forEach(grade => {
-                remaining[grade] = {};
+                schedule[grade] = [];
                 state.subjects.forEach(sub => {
-                    remaining[grade][sub.name] = sub.sessions;
+                    const subjectConfig = state.subjects.find(s => s.name === sub.name);
+                    const sessions = subjectConfig.sessions;
+                    
+                    for (let i = 0; i < sessions; i++) {
+                        schedule[grade].push({
+                            subject: sub.name,
+                            scheduled: false
+                        });
+                    }
                 });
-            });
-
-            const dailySessions = {};
-            state.days.forEach(day => {
-                dailySessions[day] = {};
-                state.grades.forEach(grade => {
-                    dailySessions[day][grade] = {};
-                    state.subjects.forEach(sub => {
-                        dailySessions[day][grade][sub.name] = 0;
-                    });
-                });
+                schedule[grade].sort(() => Math.random() - 0.5);
             });
 
             for (const day of state.days) {
-                let slotIdx = 0;
-                while (slotIdx < state.teachingSlots.length) {
-                    const slot = state.teachingSlots[slotIdx];
+                for (const slotIdx of state.teachingSlots) {
                     const busyTeachers = new Set();
-                    const gradeOrder = [...state.grades].sort(() => Math.random() - 0.5);
+                    const gradeOrder = [...state.grades];
 
                     for (const grade of gradeOrder) {
-                        let available = state.subjects.filter(sub => {
-                            if (remaining[grade][sub.name] <= 0) return false;
-                            if (dailySessions[day][grade][sub.name] > 0) return false;
+                        const unscheduled = schedule[grade].filter(s => !s.scheduled);
+                        if (unscheduled.length === 0) continue;
 
-                            const teacher = state.teachers.find(t => {
-                                const assignment = t.assignments.find(a => a.grade === grade);
-                                return assignment && assignment.subjects.includes(sub.name) && !busyTeachers.has(t.code);
-                            });
-                            return !!teacher;
-                        });
-
-                        if (available.length === 0) continue;
-
-                        let selected = available[0];
-                        if (state.prioritySlots.includes(slot)) {
-                            const cas = available.find(a => a.name === 'CAS');
-                            if (cas) selected = cas;
-                        }
-
+                        const subject = unscheduled[0];
                         const teacher = state.teachers.find(t => {
                             const assignment = t.assignments.find(a => a.grade === grade);
-                            return assignment && assignment.subjects.includes(selected.name) && !busyTeachers.has(t.code);
+                            return assignment && assignment.subjects.includes(subject.subject) && !busyTeachers.has(t.code);
                         });
 
                         if (teacher) {
-                            const needsDouble = remaining[grade][selected.name] > 1;
-                            const nextSlot = state.teachingSlots[slotIdx + 1];
-                            const canDouble = needsDouble && nextSlot && !state.slots.find(s => s.id === nextSlot && s.type !== 'session');
-
-                            if (canDouble) {
-                                timetable[day][grade][slot] = {
-                                    subject: selected.name,
-                                    code: teacher.code,
-                                    isDouble: true
-                                };
-                                timetable[day][grade][nextSlot] = {
-                                    subject: selected.name,
-                                    code: teacher.code,
-                                    isDoublePart: true
-                                };
-                                busyTeachers.add(teacher.code);
-                                remaining[grade][selected.name] -= 2;
-                                dailySessions[day][grade][selected.name] = 2;
-                                slotIdx += 2;
-                            } else {
-                                timetable[day][grade][slot] = {
-                                    subject: selected.name,
-                                    code: teacher.code
-                                };
-                                busyTeachers.add(teacher.code);
-                                remaining[grade][selected.name]--;
-                                dailySessions[day][grade][selected.name] = 1;
-                                slotIdx++;
-                            }
-                        } else {
-                            slotIdx++;
-                            break;
+                            timetable[day][grade][slotIdx] = {
+                                subject: subject.subject,
+                                code: teacher.code
+                            };
+                            subject.scheduled = true;
+                            busyTeachers.add(teacher.code);
                         }
                     }
-
-                    if (busyTeachers.size === 0) slotIdx++;
                 }
             }
 
@@ -969,7 +914,7 @@
             displayTimetable();
             document.getElementById('timetableSection').style.display = 'block';
             window.scrollTo(0, document.getElementById('timetableSection').offsetTop - 100);
-            showMessage('✅ Timetable generated successfully! Sessions distributed across week with intelligent double-sessioning.', 'success');
+            showMessage('✅ Timetable generated successfully! All sessions scheduled with perfect distribution.', 'success');
         }
 
         function displayTimetable() {
@@ -999,12 +944,8 @@
 
                         gradesToShow.forEach(grade => {
                             const cell = state.timetable[day][grade][slot.id];
-                            if (cell && cell.isDoublePart) {
-                                html += '';
-                            } else if (cell) {
-                                const cellClass = cell.isDouble ? 'double-session-cell' : 'session-cell';
-                                const label = cell.isDouble ? '(2 sessions)' : '';
-                                html += `<td class="${cellClass}">${cell.subject}<br><small>(${cell.code})</small><br><small>${label}</small></td>`;
+                            if (cell) {
+                                html += `<td class="session-cell">${cell.subject}<br><small>(${cell.code})</small></td>`;
                             } else {
                                 html += '<td class="empty-cell">—</td>';
                             }
@@ -1046,10 +987,9 @@
                         csv += `${day},${slot.time},`;
                         const row = gradesToShow.map(grade => {
                             const cell = state.timetable[day][grade][slot.id];
-                            if (!cell || cell.isDoublePart) return '';
+                            if (!cell) return '';
                             if (filterTeacher && cell.code !== filterTeacher) return '';
-                            const label = cell.isDouble ? `${cell.subject}(${cell.code})-2x` : `${cell.subject}(${cell.code})`;
-                            return label;
+                            return `${cell.subject}(${cell.code})`;
                         });
                         csv += row.join(',') + '\n';
                     }
@@ -1067,4 +1007,4 @@
         init();
     </script>
 </body>
-</html>
+    </html>
